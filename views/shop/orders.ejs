@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../includes/head.ejs') %>
+  <body>
+    <%- include('../includes/navigation.ejs') %>
+    <main>
+      <% if(orders.length > 0) { %>
+      <ul class="orders">
+        <% orders.forEach(order => { %>
+        <li class="order">
+          <h3>Order - #<%= order._id %></h3>
+          <ul>
+            <% order.products.forEach(p => { %>
+            <li><%= p.product.title %> (<%= p.quantity %>)</li>
+            <% }); %>
+          </ul>
+          <h3>Total: $<%= order.totalPrice %></h3>
+        </li>
+        <% }); %>
+      </ul>
+      <% } else { %>
+      <h1>Nothing there!</h1>
+      <% } %>
+    </main>
+  </body>
+</html>
