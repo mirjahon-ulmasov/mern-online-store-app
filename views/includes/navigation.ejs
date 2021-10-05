@@ -47,6 +47,7 @@
         </a>
       </li>
       <% } else { %>
+      <li class="main-header__item" style="color: #eee"><%= email %></li>
       <li class="main-header__item">
         <form action="/logout" method="POST">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
