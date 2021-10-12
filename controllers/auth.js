@@ -2,6 +2,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/user');
+const validator = require('express-validator');
 
 // Email Service Setup
 const SibApiV3Sdk = require('sib-api-v3-sdk');
@@ -11,26 +12,39 @@ apiKey.apiKey = process.env.API_KEY;
 const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
 exports.getLogin = (req, res, next) => {
-  let message = req.flash('error');
-  if (message.length > 0) {
-    message = message[0];
-  } else {
-    message = null;
-  }
   res.render('auth/login', {
     path: '/login',
     docTitle: 'Login',
-    errorMessage: message,
+    errorMessage: null,
+    oldInput: { email: '', password: '' },
+    validationErrors: [],
   });
 };
 
 exports.postLogin = (req, res, next) => {
   const { email, password } = req.body;
+  const errors = validator.validationResult(req);
+  // Validation 
+  if (!errors.isEmpty()) {
+    return res.status(422).render('auth/login', {
+      path: '/login',
+      docTitle: 'Login',
+      errorMessage: errors.array()[0].msg,
+      oldInput: { email: email, password: password },
+      validationErrors: errors.array(),
+    });
+  }
+  // Authentication
   User.findOne({ email: email })
     .then(user => {
       if (!user) {
-        req.flash('error', 'Invalid email');
-        return res.redirect('/login');
+        return res.status(422).render('auth/login', {
+          path: '/login',
+          docTitle: 'Login',
+          errorMessage: 'Invalid email address',
+          oldInput: { email: email, password: password },
+          validationErrors: [],
+        });
       }
       bcrypt
         .compare(password, user.password)
@@ -59,8 +73,13 @@ exports.postLogin = (req, res, next) => {
                 .catch(err => console.log(err));
             });
           }
-          req.flash('error', 'Invalid password');
-          return res.redirect('/login');
+          return res.status(422).render('auth/login', {
+            path: '/login',
+            docTitle: 'Login',
+            errorMessage: 'Invalid password',
+            oldInput: { email: email, password: password },
+            validationErrors: [],
+          });
         })
         .catch(err => {
           console.log(err);
@@ -71,59 +90,66 @@ exports.postLogin = (req, res, next) => {
 };
 
 exports.getSignup = (req, res, next) => {
-  let message = req.flash('error');
-  if (message.length > 0) {
-    message = message[0];
-  } else {
-    message = null;
-  }
   res.render('auth/signup', {
     path: '/signup',
     docTitle: 'Signup',
     errorMessage: message,
+    oldInput: {
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+    validationErrors: [],
   });
 };
 
 exports.postSignup = (req, res, next) => {
-  const { email, password, confirmPassword } = req.body;
-  User.findOne({ email: email })
-    .then(userDoc => {
-      if (userDoc) {
-        req.flash('error', 'Email is already in use');
-        return res.redirect('/signup');
-      } else {
-        return bcrypt
-          .hash(password, 12)
-          .then(hashPassword => {
-            const user = new User({
-              email: email,
-              password: hashPassword,
-              cart: { items: [] },
-            });
-            return user.save();
-          })
-          .then(result => {
-            res.redirect('/login');
+  const { email, password } = req.body;
+  const errors = validator.validationResult(req);
+  // Validation 
+  if (!errors.isEmpty()) {
+    return res.status(422).render('auth/signup', {
+      path: '/signup',
+      docTitle: 'Signup',
+      errorMessage: errors.array()[0].msg,
+      oldInput: {
+        email: email,
+        password: password,
+        confirmPassword: req.body.confirmPassword,
+      },
+      validationErrors: errors.array(),
+    });
+  }
 
-            apiInstance
-              .sendTransacEmail({
-                sender: {
-                  email: 'mirjahonulmasov@gmail.com',
-                  name: 'Mirjahon Ulmasov',
-                },
-                to: [{ email: email }],
-                subject: 'Signup succeeded!',
-                htmlContent:
-                  '<html><head></head><body><h2>You successfully signed up!</h2></body></html>',
-                headers: {
-                  'X-Mailin-custom':
-                    'custom_header_1:custom_value_1|custom_header_2:custom_value_2',
-                },
-              })
-              .catch(err => console.log(err));
-          })
-          .catch(err => console.log(err));
-      }
+  bcrypt
+    .hash(password, 12)
+    .then(hashPassword => {
+      const user = new User({
+        email: email,
+        password: hashPassword,
+        cart: { items: [] },
+      });
+      return user.save();
+    })
+    .then(() => {
+      res.redirect('/login');
+
+      apiInstance
+        .sendTransacEmail({
+          sender: {
+            email: 'mirjahonulmasov@gmail.com',
+            name: 'Mirjahon Ulmasov',
+          },
+          to: [{ email: email }],
+          subject: 'Signup succeeded!',
+          htmlContent:
+            '<html><head></head><body><h2>You successfully signed up!</h2></body></html>',
+          headers: {
+            'X-Mailin-custom':
+              'custom_header_1:custom_value_1|custom_header_2:custom_value_2',
+          },
+        })
+        .catch(err => console.log(err));
     })
     .catch(err => console.log(err));
 };
@@ -193,12 +219,6 @@ exports.getNewPassword = (req, res, next) => {
   const token = req.params.token;
   User.findOne({ resetToken: token, resetTokenExpiration: { $gt: Date.now() } })
     .then(user => {
-      let message = req.flash('error');
-      if (message.length > 0) {
-        message = message[0];
-      } else {
-        message = null;
-      }
       res.render('auth/new-password', {
         path: '/new-password',
         docTitle: 'New Password',
